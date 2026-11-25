@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>I MONEY - User Registration</title>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 6px; font-size: 22px; color: #38bdf8; }
+    p.sub { margin: 0 0 20px; font-size: 13px; color: #94a3b8; }
+    label { display: block; margin: 12px 0 6px; font-size: 13px; color: #cbd5e1; }
+    input {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 15px;
+    }
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: bold;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:disabled { background: #475569; color: #cbd5e1; cursor: not-allowed; }
+    .msg {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .msg.ok { display: block; background: #14532d; color: #bbf7d0; }
+    .msg.err { display: block; background: #7f1d1d; color: #fecaca; }
+    .footer-link {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+    }
+    .footer-link a { color: #38bdf8; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>I MONEY</h1>
+    <p class="sub">Enter your 10-digit phone number, password, and 4-digit code.</p>
+
+    <form id="regForm">
+      <label for="phone">Phone Number (10 digits)</label>
+      <input id="phone" name="phone" type="tel" maxlength="10" placeholder="9876543210" required />
+
+      <label for="password">Password (min 6 characters)</label>
+      <input id="password" name="password" type="password" minlength="6" placeholder="••••••••" required />
+
+      <label for="code">4-Digit Code</label>
+      <input id="code" name="code" type="text" inputmode="numeric" maxlength="4" placeholder="1234" required />
+
+      <button id="submitBtn" type="submit">Submit</button>
+    </form>
+
+    <div id="msgBox" class="msg"></div>
+
+    <div class="footer-link">
+      <a href="/admin.html">Admin Login</a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("regForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const msgBox = document.getElementById("msgBox");
+    let timerInterval = null;
+
+    function showMsg(text, isError) {
+      msgBox.textContent = text;
+      msgBox.className = "msg " + (isError ? "err" : "ok");
+    }
+
+    function startCooldown(seconds) {
+      clearInterval(timerInterval);
+      let left = Number(seconds) || 0;
+      if (left <= 0) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit";
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = `Wait ${left}s...`;
+
+      timerInterval = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(timerInterval);
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Submit";
+        } else {
+          submitBtn.textContent = `Wait ${left}s...`;
+        }
+      }, 1000);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const phone = document.getElementById("phone").value.trim();
+      const password = document.getElementById("password").value;
+      const code = document.getElementById("code").value.trim();
+
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch("/api/user/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, password, code })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMsg(data.error || "Submission failed.", true);
+          if (data.cooldownSeconds) {
+            startCooldown(data.cooldownSeconds);
+          } else {
+            submitBtn.disabled = false;
+          }
+          return;
+        }
+        showMsg(`${data.message} (Attempt ${data.attempt})`, false);
+        startCooldown(data.cooldownSeconds || 59);
+      } catch (err) {
+        showMsg("Network error. Please try again.", true);
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
