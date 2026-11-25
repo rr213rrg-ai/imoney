@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>I MONEY - Admin Dashboard</title>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 16px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    h1, h2 { margin: 0 0 12px; color: #38bdf8; }
+    label { display: block; margin: 10px 0 5px; font-size: 13px; color: #cbd5e1; }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 14px;
+    }
+    button {
+      padding: 9px 14px;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-green { background: #22c55e; color: #052e16; margin-top: 14px; }
+    .btn-red { background: #ef4444; color: #fff; }
+    .btn-gray { background: #475569; color: #fff; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #334155;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th { color: #94a3b8; }
+    .err { color: #fca5a5; font-size: 13px; margin-top: 10px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="loginBox" class="card" style="max-width: 400px; margin: 40px auto;">
+      <h2>I MONEY Admin Login</h2>
+      <form id="loginForm">
+        <label for="email">Admin Email</label>
+        <input id="email" type="email" placeholder="admin@imoney.local" required />
+
+        <label for="password">Admin Password</label>
+        <input id="password" type="password" placeholder="••••••••" required />
+
+        <button class="btn-green" type="submit" style="width: 100%;">Login</button>
+      </form>
+      <div id="loginErr" class="err"></div>
+    </div>
+
+    <div id="dashBox" class="card hidden">
+      <div class="topbar">
+        <div>
+          <h1>I MONEY Admin Dashboard</h1>
+          <small id="adminEmail" style="color: #94a3b8;"></small>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-gray" onclick="loadUsers()">Refresh</button>
+          <button class="btn-red" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Phone</th>
+              <th>4-Digit Codes</th>
+              <th>Attempts</th>
+              <th>Cooldown</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const loginBox = document.getElementById("loginBox");
+    const dashBox = document.getElementById("dashBox");
+    const loginForm = document.getElementById("loginForm");
+    const loginErr = document.getElementById("loginErr");
+    const adminEmailEl = document.getElementById("adminEmail");
+    const usersBody = document.getElementById("usersBody");
+    let pollInterval = null;
+
+    async function checkSession() {
+      const res = await fetch("/api/admin/me");
+      if (res.ok) {
+        const data = await res.json();
+        showDashboard(data.admin && data.admin.email);
+      } else {
+        loginBox.classList.remove("hidden");
+        dashBox.classList.add("hidden");
+      }
+    }
+
+    function showDashboard(email) {
+      loginBox.classList.add("hidden");
+      dashBox.classList.remove("hidden");
+      adminEmailEl.textContent = email ? `Logged in as: ${email}` : "";
+      loadUsers();
+      clearInterval(pollInterval);
+      pollInterval = setInterval(loadUsers, 5000);
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      loginErr.textContent = "";
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        loginErr.textContent = data.error || "Login failed.";
+        return;
+      }
+      showDashboard(data.admin && data.admin.email);
+    });
+
+    async function loadUsers() {
+      const res = await fetch("/api/admin/users");
+      if (res.status === 401 || res.status === 403) {
+        clearInterval(pollInterval);
+        loginBox.classList.remove("hidden");
+        dashBox.classList.add("hidden");
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const users = Array.isArray(data.users) ? data.users : [];
+      usersBody.innerHTML = users.length
+        ? users.map((u) => `
+            <tr>
+              <td>${u.phone}</td>
+              <td>${(u.codes || []).join(", ")}</td>
+              <td>${u.attempts || 0}</td>
+              <td>${u.remainingCooldown ? u.remainingCooldown + "s" : "Ready"}</td>
+              <td><button class="btn-red" onclick="deleteUser('${u.id}')">Delete</button></td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="5" style="color:#94a3b8;">No users registered yet.</td></tr>`;
+    }
+
+    async function deleteUser(id) {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: "DELETE"
+      });
+      if (res.ok) loadUsers();
+    }
+
+    async function logout() {
+      clearInterval(pollInterval);
+      await fetch("/api/admin/logout", { method: "POST" });
+      loginBox.classList.remove("hidden");
+      dashBox.classList.add("hidden");
+    }
+
+    checkSession();
+  </script>
+</body>
+  </html>
