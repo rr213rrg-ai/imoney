@@ -1,201 +1,625 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>I MONEY - Admin Dashboard</title>
-  <style>
-    * { box-sizing: border-box; font-family: Arial, sans-serif; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: #0f172a;
-      color: #f8fafc;
-      padding: 16px;
-    }
-    .container { max-width: 900px; margin: 0 auto; }
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-    h1, h2 { margin: 0 0 12px; color: #38bdf8; }
-    label { display: block; margin: 10px 0 5px; font-size: 13px; color: #cbd5e1; }
-    input {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #475569;
-      background: #0f172a;
-      color: #fff;
-      font-size: 14px;
-    }
-    button {
-      padding: 9px 14px;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .btn-green { background: #22c55e; color: #052e16; margin-top: 14px; }
-    .btn-red { background: #ef4444; color: #fff; }
-    .btn-gray { background: #475569; color: #fff; }
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #334155;
-      text-align: left;
-      white-space: nowrap;
-    }
-    th { color: #94a3b8; }
-    .err { color: #fca5a5; font-size: 13px; margin-top: 10px; }
-    .hidden { display: none; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I MONEY - Admin Panel</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background: #f2f5fa;
+  color: #17233c;
+  min-height: 100vh;
+}
+
+header {
+  background: #071d49;
+  color: white;
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.brand span {
+  font-size: 13px;
+  font-weight: normal;
+  opacity: 0.85;
+  margin-left: 8px;
+}
+
+button {
+  border: none;
+  border-radius: 7px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #8793a8;
+  cursor: not-allowed;
+}
+
+.login-container {
+  width: 92%;
+  max-width: 430px;
+  margin: 45px auto;
+}
+
+.panel {
+  background: white;
+  border-radius: 12px;
+  padding: 25px 22px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+}
+
+h2 {
+  color: #071d49;
+  font-size: 23px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #788397;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 16px 0 7px;
+  color: #17233c;
+}
+
+input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #ccd4e0;
+  border-radius: 7px;
+  outline: none;
+  font-size: 15px;
+  background: white;
+}
+
+input:focus {
+  border-color: #174b9a;
+  box-shadow: 0 0 0 2px rgba(23, 75, 154, 0.08);
+}
+
+.primary-btn {
+  width: 100%;
+  padding: 14px;
+  margin-top: 22px;
+  background: #071d49;
+  color: white;
+  font-size: 15px;
+}
+
+.logout-btn {
+  background: #c92a2a;
+  color: white;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+.dashboard {
+  width: 95%;
+  max-width: 980px;
+  margin: 28px auto;
+}
+
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.refresh-badge {
+  background: #eef3fb;
+  color: #071d49;
+  border: 1px solid #d4dfef;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+th, td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e6ecf5;
+  vertical-align: middle;
+}
+
+th {
+  background: #f5f8fc;
+  color: #071d49;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+td {
+  font-size: 14px;
+}
+
+.phone-text {
+  font-weight: bold;
+  color: #071d49;
+  letter-spacing: 0.4px;
+}
+
+.codes-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #ccd4e0;
+  border-radius: 7px;
+  background: #f8faff;
+  color: #071d49;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.code-box.empty {
+  color: #9aa5b8;
+  background: #fcfcfd;
+  border-style: dashed;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-wait {
+  background: #fff4e5;
+  color: #b25e09;
+  border: 1px solid #ffd8a8;
+}
+
+.status-ready {
+  background: #e4f7eb;
+  color: #176438;
+  border: 1px solid #b2f2bb;
+}
+
+.delete-btn {
+  background: #dc3545;
+  color: white;
+  padding: 8px 13px;
+  font-size: 13px;
+}
+
+.message {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.success {
+  display: block;
+  background: #e4f7eb;
+  color: #176438;
+}
+
+.error {
+  display: block;
+  background: #fde8e8;
+  color: #a12626;
+}
+
+.hidden {
+  display: none !important;
+}
+
+footer {
+  text-align: center;
+  color: #8993a4;
+  font-size: 12px;
+  padding: 25px 10px;
+}
+
+@media (max-width: 520px) {
+  .panel {
+    padding: 20px 15px;
+  }
+
+  .code-box {
+    min-width: 54px;
+    height: 34px;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+}
+</style>
 </head>
 <body>
-  <div class="container">
-    <div id="loginBox" class="card" style="max-width: 400px; margin: 40px auto;">
-      <h2>I MONEY Admin Login</h2>
-      <form id="loginForm">
-        <label for="email">Admin Email</label>
-        <input id="email" type="email" placeholder="admin@imoney.local" required />
 
-        <label for="password">Admin Password</label>
-        <input id="password" type="password" placeholder="••••••••" required />
+<header>
+  <div class="brand">I MONEY <span>Admin Panel</span></div>
+  <button id="logoutBtn" class="logout-btn hidden" onclick="logout()">Logout</button>
+</header>
 
-        <button class="btn-green" type="submit" style="width: 100%;">Login</button>
-      </form>
-      <div id="loginErr" class="err"></div>
+<!-- ADMIN LOGIN -->
+<div id="loginSection" class="login-container">
+  <section class="panel">
+    <h2>Admin Login</h2>
+    <p class="subtitle">Sign in with your admin email and password to view registered users and 4-digit codes.</p>
+
+    <label for="adminEmail">Admin Email</label>
+    <input type="email" id="adminEmail" placeholder="Enter admin email" autocomplete="username" required>
+
+    <label for="adminPassword">Password</label>
+    <input type="password" id="adminPassword" placeholder="Enter admin password" autocomplete="current-password" required>
+
+    <button id="loginBtn" class="primary-btn" onclick="login()">Login</button>
+    <div id="loginMessage" class="message" role="status" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<main id="dashboardSection" class="dashboard hidden">
+  <section class="panel">
+    <div class="top-bar">
+      <div>
+        <h2>Registered Demo Users</h2>
+        <p class="subtitle" style="margin-bottom: 0;">1st box (59s), 2nd box (59s), and 3rd box (90s) 4-digit codes sync.</p>
+      </div>
+      <div id="refreshStatus" class="refresh-badge">Auto refresh: Every 1s</div>
     </div>
 
-    <div id="dashBox" class="card hidden">
-      <div class="topbar">
-        <div>
-          <h1>I MONEY Admin Dashboard</h1>
-          <small id="adminEmail" style="color: #94a3b8;"></small>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn-gray" onclick="loadUsers()">Refresh</button>
-          <button class="btn-red" onclick="logout()">Logout</button>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Phone</th>
-              <th>4-Digit Codes</th>
-              <th>Attempts</th>
-              <th>Cooldown</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="usersBody"></tbody>
-        </table>
-      </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Phone Number</th>
+            <th>4-Digit Codes (1st / 2nd / 3rd)</th>
+            <th>Attempts</th>
+            <th>Timer / Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="usersTable">
+          <tr>
+            <td colspan="5">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-  </div>
 
-  <script>
-    const loginBox = document.getElementById("loginBox");
-    const dashBox = document.getElementById("dashBox");
-    const loginForm = document.getElementById("loginForm");
-    const loginErr = document.getElementById("loginErr");
-    const adminEmailEl = document.getElementById("adminEmail");
-    const usersBody = document.getElementById("usersBody");
-    let pollInterval = null;
+    <div id="dashboardMessage" class="message" role="status" aria-live="polite"></div>
+  </section>
+</main>
 
-    async function checkSession() {
-      const res = await fetch("/api/admin/me");
-      if (res.ok) {
-        const data = await res.json();
-        showDashboard(data.admin && data.admin.email);
-      } else {
-        loginBox.classList.remove("hidden");
-        dashBox.classList.add("hidden");
-      }
+<footer>I MONEY</footer>
+
+<script>
+"use strict";
+
+const API = "/api/admin";
+
+const loginSection = document.getElementById("loginSection");
+const dashboardSection = document.getElementById("dashboardSection");
+const logoutBtn = document.getElementById("logoutBtn");
+const loginMessage = document.getElementById("loginMessage");
+const dashboardMessage = document.getElementById("dashboardMessage");
+const refreshStatus = document.getElementById("refreshStatus");
+
+let refreshTimer = null;
+let isFetchingUsers = false;
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(API + path, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
     }
+  });
 
-    function showDashboard(email) {
-      loginBox.classList.add("hidden");
-      dashBox.classList.remove("hidden");
-      adminEmailEl.textContent = email ? `Logged in as: ${email}` : "";
-      loadUsers();
-      clearInterval(pollInterval);
-      pollInterval = setInterval(loadUsers, 5000);
-    }
+  let data = {};
+  try {
+    data = await response.json();
+  } catch (_) {
+    throw new Error("Invalid server response.");
+  }
 
-    loginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      loginErr.textContent = "";
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
+  if (!response.ok) {
+    throw new Error(data.message || data.error || "Request failed.");
+  }
 
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        loginErr.textContent = data.error || "Login failed.";
-        return;
-      }
-      showDashboard(data.admin && data.admin.email);
+  return data;
+}
+
+function showMessage(el, text, type) {
+  el.textContent = text;
+  el.className = "message " + type;
+}
+
+function clearMessage(el) {
+  el.textContent = "";
+  el.className = "message";
+}
+
+// Extract 1st, 2nd, and 3rd 4-digit code cleanly from backend response
+function extractThreeCodes(user) {
+  let list = [];
+
+  if (Array.isArray(user.codes)) {
+    list = user.codes.slice(0, 3);
+  } else {
+    const c1 = user.code_1 ?? user.first_code ?? user.code1 ?? user.Code ?? user.code ?? "";
+    const c2 = user.code_2 ?? user.second_code ?? user.code2 ?? "";
+    const c3 = user.code_3 ?? user.third_code ?? user.code3 ?? "";
+    list = [c1, c2, c3];
+  }
+
+  return [0, 1, 2].map((idx) => {
+    const val = list[idx];
+    return val !== undefined && val !== null && String(val).trim() !== ""
+      ? String(val).trim()
+      : "----";
+  });
+}
+
+// ADMIN LOGIN
+async function login() {
+  const email = document.getElementById("adminEmail").value.trim();
+  const password = document.getElementById("adminPassword").value;
+  const loginBtn = document.getElementById("loginBtn");
+
+  clearMessage(loginMessage);
+
+  if (!email || !password) {
+    showMessage(loginMessage, "Please enter both email and password.", "error");
+    return;
+  }
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Logging in...";
+
+  try {
+    await apiRequest("/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
     });
 
-    async function loadUsers() {
-      const res = await fetch("/api/admin/users");
-      if (res.status === 401 || res.status === 403) {
-        clearInterval(pollInterval);
-        loginBox.classList.remove("hidden");
-        dashBox.classList.add("hidden");
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      const users = Array.isArray(data.users) ? data.users : [];
-      usersBody.innerHTML = users.length
-        ? users.map((u) => `
-            <tr>
-              <td>${u.phone}</td>
-              <td>${(u.codes || []).join(", ")}</td>
-              <td>${u.attempts || 0}</td>
-              <td>${u.remainingCooldown ? u.remainingCooldown + "s" : "Ready"}</td>
-              <td><button class="btn-red" onclick="deleteUser('${u.id}')">Delete</button></td>
-            </tr>
-          `).join("")
-        : `<tr><td colspan="5" style="color:#94a3b8;">No users registered yet.</td></tr>`;
-    }
+    document.getElementById("adminPassword").value = "";
+    await openDashboard();
+  } catch (err) {
+    showMessage(loginMessage, err.message, "error");
+  } finally {
+    loginBtn.disabled = false;
+    loginBtn.textContent = "Login";
+  }
+}
 
-    async function deleteUser(id) {
-      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-        method: "DELETE"
-      });
-      if (res.ok) loadUsers();
-    }
+// CHECK EXISTING SESSION
+async function checkLogin() {
+  try {
+    await apiRequest("/me");
+    await openDashboard();
+  } catch (_) {
+    showLogin();
+  }
+}
 
-    async function logout() {
-      clearInterval(pollInterval);
-      await fetch("/api/admin/logout", { method: "POST" });
-      loginBox.classList.remove("hidden");
-      dashBox.classList.add("hidden");
-    }
+function showLogin() {
+  loginSection.classList.remove("hidden");
+  dashboardSection.classList.add("hidden");
+  logoutBtn.classList.add("hidden");
 
-    checkSession();
-  </script>
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+// OPEN DASHBOARD & START 1-SECOND AUTO REFRESH
+async function openDashboard() {
+  loginSection.classList.add("hidden");
+  dashboardSection.classList.remove("hidden");
+  logoutBtn.classList.remove("hidden");
+
+  await loadUsers();
+
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+
+  refreshTimer = setInterval(() => {
+    if (document.visibilityState === "visible") {
+      loadUsers();
+    }
+  }, 1000);
+}
+
+// FETCH USERS FROM BACKEND
+async function loadUsers() {
+  if (isFetchingUsers) return;
+  isFetchingUsers = true;
+
+  try {
+    const data = await apiRequest("/users");
+    const users = Array.isArray(data.users) ? data.users : (Array.isArray(data) ? data : []);
+    renderUsers(users);
+    clearMessage(dashboardMessage);
+    refreshStatus.textContent = "Auto refresh: Every 1s (Live)";
+  } catch (err) {
+    refreshStatus.textContent = "Auto refresh: Every 1s (Retry)";
+    showMessage(dashboardMessage, err.message, "error");
+  } finally {
+    isFetchingUsers = false;
+  }
+}
+
+// RENDER TABLE WITH PHONE + 3 CODE BOXES + ATTEMPTS + COOLDOWN + DELETE BUTTON
+function renderUsers(users) {
+  const tbody = document.getElementById("usersTable");
+  tbody.replaceChildren();
+
+  if (!users.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.textContent = "No registered users found.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  users.forEach((user) => {
+    const row = document.createElement("tr");
+
+    // Phone Number Cell
+    const phoneCell = document.createElement("td");
+    phoneCell.className = "phone-text";
+    phoneCell.textContent = String(user.phone || user.demo_phone || "");
+
+    // 3 Boxes Cell (1st, 2nd, 3rd 4-digit code)
+    const codesCell = document.createElement("td");
+    const group = document.createElement("div");
+    group.className = "codes-group";
+
+    const threeCodes = extractThreeCodes(user);
+    const stepLabels = [
+      "1st 4-Digit Code (59s cooldown)",
+      "2nd 4-Digit Code (59s cooldown)",
+      "3rd 4-Digit Code (90s cooldown)"
+    ];
+
+    threeCodes.forEach((codeVal, index) => {
+      const box = document.createElement("span");
+      const isEmpty = codeVal === "----";
+      box.className = isEmpty ? "code-box empty" : "code-box";
+      box.title = stepLabels[index];
+      box.textContent = codeVal;
+      group.appendChild(box);
+    });
+
+    codesCell.appendChild(group);
+
+    // Attempts Cell
+    const attemptsCell = document.createElement("td");
+    const attemptsCount = Number(user.attempts) || threeCodes.filter((c) => c !== "----").length || 0;
+    attemptsCell.textContent = `${Math.min(attemptsCount, 3)} / 3`;
+
+    // Timer / Cooldown Cell
+    const statusCell = document.createElement("td");
+    const remaining = Number(user.remainingCooldown) || 0;
+    const badge = document.createElement("span");
+    if (remaining > 0) {
+      badge.className = "status-pill status-wait";
+      badge.textContent = `${remaining}s left`;
+    } else {
+      badge.className = "status-pill status-ready";
+      badge.textContent = "Ready";
+    }
+    statusCell.appendChild(badge);
+
+    // Delete Button Cell
+    const actionCell = document.createElement("td");
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-btn";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.onclick = () => deleteUser(user.id ?? user._id ?? user.phone);
+    actionCell.appendChild(deleteBtn);
+
+    row.appendChild(phoneCell);
+    row.appendChild(codesCell);
+    row.appendChild(attemptsCell);
+    row.appendChild(statusCell);
+    row.appendChild(actionCell);
+    tbody.appendChild(row);
+  });
+}
+
+// DELETE USER
+async function deleteUser(id) {
+  if (!id && id !== 0) {
+    showMessage(dashboardMessage, "User ID missing.", "error");
+    return;
+  }
+
+  const confirmed = confirm("Are you sure you want to delete this user?");
+  if (!confirmed) return;
+
+  try {
+    await apiRequest("/users/" + encodeURIComponent(id), {
+      method: "DELETE"
+    });
+
+    showMessage(dashboardMessage, "User deleted successfully.", "success");
+    await loadUsers();
+  } catch (err) {
+    showMessage(dashboardMessage, err.message, "error");
+  }
+}
+
+// LOGOUT
+async function logout() {
+  try {
+    await apiRequest("/logout", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+  } catch (_) {
+    // Ignore logout request errors and return to login screen
+  }
+
+  showLogin();
+}
+
+// INITIALIZE
+checkLogin();
+</script>
 </body>
-  </html>
+      </html>
