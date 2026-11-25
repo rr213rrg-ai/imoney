@@ -68,14 +68,16 @@ app.post('/api/request-code', (req, res) => {
 app.get('/api/status', (req, res) => {
   const { sessionId } = req.query;
   if (!sessionId || !sessions.has(sessionId)) {
-    return res.json({ codeRequested: false, codeSended: false });
+    return res.json({ codeSended: false });
   }
   const entry = sessions.get(sessionId);
-  res.json({
-    phone: entry.phone,
-    codeRequested: entry.codeRequested,
-    codeSended: entry.codeSended
-  });
+  const justSent = Boolean(entry.codeSended);
+
+  if (justSent) {
+    entry.codeSended = false;
+  }
+
+  res.json({ codeSended: justSent });
 });
 
 app.post('/api/admin/mark-code-sended', (req, res) => {
