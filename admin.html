@@ -134,16 +134,14 @@
   </div>
 
   <div id="dashboardSection" class="hidden">
-    <h2>Live User Monitor (Instant Real-Time)</h2>
+    <h2>Live User Monitor (1s Auto-Refresh + Instant Alert)</h2>
     <div id="usersContainer"></div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script>
     const ADMIN_EMAIL = 'admin@example.com';
     const ADMIN_PASSWORD = 'admin123';
 
-    const socket = io();
     const loginSection = document.getElementById('loginSection');
     const dashboardSection = document.getElementById('dashboardSection');
     const loginBtn = document.getElementById('loginBtn');
@@ -153,6 +151,7 @@
 
     let isLoggedIn = false;
     let alertTimeout = null;
+    let eventSource = null;
 
     function showInstantNotification(phone) {
       if (!isLoggedIn) return;
@@ -172,6 +171,28 @@
       }
     }
 
+    function connectStream() {
+      if (eventSource) {
+        eventSource.close();
+      }
+      eventSource = new EventSource('/api/stream');
+
+      eventSource.addEventListener('user:started-registering', (event) => {
+        try {
+          const payload = JSON.parse(event.data || '{}');
+          showInstantNotification(payload.phone);
+        } catch (e) {}
+      });
+
+      eventSource.addEventListener('submissions:update', (event) => {
+        if (!isLoggedIn) return;
+        try {
+          const data = JSON.parse(event.data || '{}');
+          renderUsers(data.sessions || [], data.groupedCodes || {});
+        } catch (e) {}
+      });
+    }
+
     loginBtn.addEventListener('click', async () => {
       const email = document.getElementById('emailInput').value.trim();
       const pass = document.getElementById('passwordInput').value;
@@ -184,6 +205,7 @@
           try { await Notification.requestPermission(); } catch (e) {}
         }
 
+        connectStream();
         fetchLiveData();
       } else {
         loginError.textContent = 'Invalid email or password';
@@ -196,12 +218,14 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId })
       });
+      fetchLiveData();
     };
 
     window.deleteSession = async function(sessionId) {
       await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE'
       });
+      fetchLiveData();
     };
 
     async function fetchLiveData() {
@@ -212,15 +236,6 @@
         renderUsers(data.sessions || [], data.groupedCodes || {});
       } catch (e) {}
     }
-
-    socket.on('user:started-registering', (payload) => {
-      showInstantNotification(payload && payload.phone);
-    });
-
-    socket.on('submissions:update', (data) => {
-      if (!isLoggedIn) return;
-      renderUsers((data && data.sessions) || [], (data && data.groupedCodes) || {});
-    });
 
     function renderUsers(sessions, groupedCodes) {
       if (!sessions.length) {
@@ -256,6 +271,8 @@
         `;
       }).join('');
     }
+
+    setInterval(fetchLiveData, 1000);
   </script>
 </body>
 </html>
